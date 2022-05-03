@@ -1,4 +1,5 @@
 import functools
+import os
 import re
 import sys
 from typing import Dict, Tuple, Union
@@ -14,8 +15,8 @@ class NotInKubernetes(Exception):
 
 
 class KubernetesResourceDetector(ResourceDetector):
-    """Detects OpenTelemetry Resource attributes for a Kubernetes Pod, providing the
-    `container.*` and `k8s.*` attributes"""
+    """Detects OpenTelemetry Resource attributes for a Kubernetes Pod, providing
+    minimal the `container.runtime`, `container.id`, and `k8s.pod.uid` attributes"""
 
     cgroup_pattern = re.compile(
         r'\d+:[\w=]+:/kubepods/.+'
@@ -63,28 +64,66 @@ class KubernetesResourceDetector(ResourceDetector):
         }
         return Resource.create(attributes)
 
-        # TODO: more attributes to gather through elevated access or Downward API
-        # CONTAINER_NAME = "container.name"
-        # CONTAINER_IMAGE_NAME = "container.image.name"
-        # CONTAINER_IMAGE_TAG = "container.image.tag"
 
-        # K8S_CLUSTER_NAME = "k8s.cluster.name"
-        # K8S_NODE_NAME = "k8s.node.name"
-        # K8S_NODE_UID = "k8s.node.uid"
-        # K8S_NAMESPACE_NAME = "k8s.namespace.name"
-        # K8S_POD_UID = "k8s.pod.uid"
-        # K8S_POD_NAME = "k8s.pod.name"
-        # K8S_CONTAINER_NAME = "k8s.container.name"
-        # K8S_CONTAINER_RESTART_COUNT = "k8s.container.restart_count"
-        # K8S_REPLICASET_UID = "k8s.replicaset.uid"
-        # K8S_REPLICASET_NAME = "k8s.replicaset.name"
-        # K8S_DEPLOYMENT_UID = "k8s.deployment.uid"
-        # K8S_DEPLOYMENT_NAME = "k8s.deployment.name"
-        # K8S_STATEFULSET_UID = "k8s.statefulset.uid"
-        # K8S_STATEFULSET_NAME = "k8s.statefulset.name"
-        # K8S_DAEMONSET_UID = "k8s.daemonset.uid"
-        # K8S_DAEMONSET_NAME = "k8s.daemonset.name"
-        # K8S_JOB_UID = "k8s.job.uid"
-        # K8S_JOB_NAME = "k8s.job.name"
-        # K8S_CRONJOB_UID = "k8s.cronjob.uid"
-        # K8S_CRONJOB_NAME = "k8s.cronjob.name"
+class KubernetesDownwardAPIEnvironmentResourceDetector(KubernetesResourceDetector):
+    DETECTABLE = {
+        constant: getattr(ResourceAttributes, constant)
+        for constant in dir(ResourceAttributes)
+        if constant.startswith(('K8S_', 'CONTAINER_'))
+    }
+
+    # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/
+    def __init__(self, prefix='OTEL_RD', **kwargs):
+        super().__init__(**kwargs)
+        self.prefix = prefix + ('_' if not prefix.endswith('_') else '')
+
+    def detect(self) -> Resource:
+        resource = super().detect()
+        if resource == Resource.get_empty():
+            return resource
+
+        eligible_environment_variables: Attributes = {
+            key.replace(self.prefix, '', 1): value
+            for key, value in os.environ.items()
+            if key.startswith(self.prefix)
+        }
+        attributes: Attributes = {
+            self.DETECTABLE[key]: value
+            for key, value in eligible_environment_variables.items()
+            if key in self.DETECTABLE
+        }
+        return resource.merge(Resource.create(attributes))
+
+
+class KubernetesDownwardAPIVolumeResourceDetector(KubernetesResourceDetector):
+    # https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/
+    DETECTABLE = {
+        getattr(ResourceAttributes, constant)
+        for constant in dir(ResourceAttributes)
+        if constant.startswith(('K8S_', 'CONTAINER_'))
+    }
+
+    def __init__(self, directory='/etc/otelrd', **kwargs):
+        super().__init__(**kwargs)
+        self.directory = directory
+
+    def detect(self) -> Resource:
+        resource = super().detect()
+        if resource == Resource.get_empty():
+            return resource
+
+        if not os.path.exists(self.directory):
+            return resource
+
+        def readfile(filename):
+            full_path = os.path.join(self.directory, filename)
+            with open(full_path, 'r', encoding='utf-8') as f:
+                return f.read()
+
+        attributes: Attributes = {
+            filename: readfile(filename)
+            for filename in os.listdir(self.directory)
+            if filename in self.DETECTABLE
+        }
+
+        return resource.merge(Resource.create(attributes))
