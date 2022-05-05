@@ -39,6 +39,8 @@ addopts = """
     --isort
     --pylint
     --mypy
+    -n 2
+    -W error
     --cov=src
     --cov=tests
     --cov-branch
