@@ -1,11 +1,13 @@
 import functools
 import os
 import re
-import sys
+from importlib.metadata import version
 from typing import Dict, Tuple, Union
 
 from opentelemetry.sdk.resources import Resource, ResourceDetector
 from opentelemetry.semconv.resource import ResourceAttributes
+
+__version__ = version("opentelemetry_resourcedetector_kubernetes")
 
 Attributes = Dict[str, Union[str, bool, int, float]]
 
