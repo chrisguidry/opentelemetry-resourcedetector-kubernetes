@@ -1,6 +1,6 @@
 # opentelemetry-resourcedetector-kubernetes
 
-An OpenTelemetry package to populates Resource attributes for Kubernetes pods.
+An OpenTelemetry package to populate Resource attributes for Kubernetes pods.
 
 ## Usage
 
@@ -15,7 +15,7 @@ resource = get_aggregated_resources([
     SomeOtherResourceDetector()
 ])
 
-... pass the returned `resource` to a TracerProvder, for example ...
+... pass the returned `resource` to a TracerProvider, for example ...
 ```
 
 The `KubernetesResourceDetector` is able to detect the basic identifying information
@@ -106,7 +106,7 @@ resource = get_aggregated_resources([
     SomeOtherResourceDetector()
 ])
 
-... pass the returned `resource` to a TracerProvder, for example ...
+... pass the returned `resource` to a TracerProvider, for example ...
 ```
 
 In this example, the `Resource` for all traces would include the attributes:
@@ -175,7 +175,7 @@ resource = get_aggregated_resources([
     SomeOtherResourceDetector()
 ])
 
-... pass the returned `resource` to a TracerProvder, for example ...
+... pass the returned `resource` to a TracerProvider, for example ...
 ```
 
 In this example, the `Resource` for all traces would include the attributes:
